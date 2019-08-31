@@ -24,7 +24,7 @@ type GuardDutyFindings struct {
 
 var (
 	// USERNAME username of slack
-	USERNAME = "GuardDutyError"
+	USERNAME = "GuardDutyAlert"
 
 	// SLACKURL webhookurl of slack
 	SLACKURL = os.Getenv("SLACKURL")
