@@ -1,15 +1,43 @@
-GOCMD=go
-GOBUILD=$(GOCMD) build
-GOGET=$(GOCMD) get
+export GO111MODULE=on
 
-.PHONY: setup
+
 ## Install dependencies
-setup:
-	$(GOGET) github.com/mitchellh/gox
-	$(GOGET) -d -t ./...
+.PHONY: deps
+deps:
+	go get -v -d
 
-.PHONY: cross-build
-## Cross build binaries
-cross-build:
+
+## Setup development
+.PHONY: deps
+devel-deps: deps
+	GO111MODULE=off
+	go get -u golang.org/x/lint/golint
+	go get -u github.com/motemen/gobump/cmd/gobump
+	go get -u github.com/Songmu/make2help/cmd/make2help
+
+
+## Setup build
+.PHONY: pre-build
+build-deps:
+	go get -u github.com/mitchellh/gox
+
+
+## Build binaries
+.PHONY: build
+build: build-deps
 	rm -rf ./main
 	gox -os=linux -arch=amd64 -output=./main -ldflags "-s -w"
+	gobump show
+
+
+## Lint
+.PHONY: lint
+lint: devel-deps
+	go vet ./...
+	golint -set_exit_status ./...
+
+
+## Show help
+.PHONY: help
+help:
+	@make2help $(MAKEFILE_LIST)
