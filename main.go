@@ -13,6 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 )
 
+const version = "0.0.1"
+
 // GuardDutyFindings set value from json
 type GuardDutyFindings struct {
 	Title       string      `json:"title"`
