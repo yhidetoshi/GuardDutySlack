@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/ashwanthkumar/slack-go-webhook"
 	"github.com/aws/aws-lambda-go/events"
@@ -13,16 +15,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 )
 
-const version = "0.0.1"
-
-// GuardDutyFindings set value from json
-type GuardDutyFindings struct {
-	Title       string      `json:"title"`
-	Type        string      `json:"type"`
-	AccountID   string      `json:"accountID"`
-	Description string      `json:"description"`
-	Severity    json.Number `json:"severity"`
-}
+const (
+	version = "0.0.1"
+	region  = "ap-northeast-1"
+)
 
 var (
 	// USERNAME username of slack
@@ -31,9 +27,43 @@ var (
 	// SLACKURL webhookurl of slack
 	SLACKURL = os.Getenv("SLACKURL")
 
-	config = aws.Config{Region: aws.String("ap-northeast-1")}
-	svcIAM = iam.New(session.New(&config))
+	notPostThreshold = os.Getenv("THRESHOLD")
+
+	// add excluded account name: []string{"dev"}
+	excludeAccountList = []string{"dev"}
+	config             = aws.Config{Region: aws.String(region)}
+	svcIAM             = iam.New(session.New(&config))
 )
+
+// GuardDutyFindings set guardduty GuardDutyFindingsValue
+type GuardDutyFindings struct {
+	AccountID   string      `json:"accountId"`
+	Region      string      `json:"region"`
+	Type        string      `json:"type"`
+	Severity    json.Number `json:"severity"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Resource    Resource    `json:"resource"`
+}
+
+// Resource set guardduty ResourceValue
+type Resource struct {
+	ResourceType     string           `json:"resourceType,omitempty"`
+	UserName         string           `json:"userName,omitempty"`
+	InstanceDetails  InstanceDetails  `json:"instanceDetails,,omitempty"`
+	AccessKeyDetails AccessKeyDetails `json:"accessKeyDetails,,omitempty"`
+}
+
+// InstanceDetails set guardduty value
+type InstanceDetails struct {
+	InstanceID   string `json:"instanceId,omitempty"`
+	InstanceType string `json:"instanceType,"`
+}
+
+// AccessKeyDetails set guardduty AccessKeyDetailsValue
+type AccessKeyDetails struct {
+	UserName string `json:"userName,omitempty"`
+}
 
 func main() {
 	lambda.Start(Handler)
@@ -41,6 +71,8 @@ func main() {
 
 // Handler get value from cloudwatch event
 func Handler(event events.CloudWatchEvent) (events.CloudWatchEvent, error) {
+	var resource string
+	postFlag := true
 	gd := &GuardDutyFindings{}
 
 	err := json.Unmarshal([]byte(event.Detail), gd)
@@ -48,16 +80,36 @@ func Handler(event events.CloudWatchEvent) (events.CloudWatchEvent, error) {
 		fmt.Println(err)
 	}
 
-	// cast to float54
+	// cast to float64
 	float64Severity, err := gd.Severity.Float64()
 	slackColor := CheckSeverityLevel(float64Severity)
+	float64NotPostThreshold, err := strconv.ParseFloat(notPostThreshold, 64)
 
 	// get aws account name
 	accountAliasName := FetchAccountAlias()
 
-	// post slack
-	PostSlack(slackColor, accountAliasName, string(gd.Severity), gd.Type, gd.Description)
+	// Check excluded List
+	for i := range excludeAccountList {
+		if strings.Contains(accountAliasName, excludeAccountList[i]) {
+			postFlag = false
+		}
+	}
 
+	// Set affected resource
+	if gd.Resource.InstanceDetails.InstanceID != "" {
+		resource = gd.Resource.InstanceDetails.InstanceID
+	} else if gd.Resource.AccessKeyDetails.UserName != "" {
+		resource = gd.Resource.AccessKeyDetails.UserName
+	} else {
+		resource = "unknown"
+	}
+
+	// Post slack
+	if postFlag == false && float64Severity < float64NotPostThreshold {
+		fmt.Println("Do not post slack")
+	} else {
+		PostSlack(slackColor, gd.Title, accountAliasName, string(gd.Severity), resource, gd.Type, gd.Description)
+	}
 	return event, err
 }
 
@@ -95,14 +147,16 @@ func FetchAccountAlias() string {
 }
 
 // PostSlack post slack result
-func PostSlack(slackColor string, accountAliasName string, severity string, reason string, description string) {
+func PostSlack(slackColor string, title string, accountAliasName string, severity string, resource string, reason string, description string) {
+	field0 := slack.Field{Title: "Title", Value: "_" + title + "_"}
 	field1 := slack.Field{Title: "Account", Value: accountAliasName}
 	field2 := slack.Field{Title: "Severity", Value: severity}
-	field3 := slack.Field{Title: "Type", Value: reason}
-	field4 := slack.Field{Title: "Description", Value: "```" + description + "```"}
+	field3 := slack.Field{Title: "Affected Resource", Value: resource}
+	field4 := slack.Field{Title: "Type", Value: reason}
+	field5 := slack.Field{Title: "Description", Value: "```" + description + "```"}
 
 	attachment := slack.Attachment{}
-	attachment.AddField(field1).AddField(field2).AddField(field3).AddField(field4)
+	attachment.AddField(field0).AddField(field1).AddField(field2).AddField(field3).AddField(field4).AddField(field5)
 	color := slackColor
 	attachment.Color = &color
 	payload := slack.Payload{
@@ -111,6 +165,6 @@ func PostSlack(slackColor string, accountAliasName string, severity string, reas
 	}
 	err := slack.Send(SLACKURL, "", payload)
 	if err != nil {
-		fmt.Println(err)
+		os.Exit(1)
 	}
 }
