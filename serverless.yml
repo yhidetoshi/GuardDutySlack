@@ -17,6 +17,7 @@ functions:
     memorySize: 128
     environment:
       SLACKURL: ${opt:slackurl}
+      THRESHOLD: 2.0
     events:
       - cloudwatchEvent:
           event:
