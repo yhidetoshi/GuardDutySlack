@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/ashwanthkumar/slack-go-webhook"
 	"github.com/aws/aws-lambda-go/events"
@@ -16,23 +15,19 @@ import (
 )
 
 const (
-	version = "0.0.1"
+	version = "0.0.2"
 	region  = "ap-northeast-1"
+	iconURL = "https://ucarecdn.com/c847cfef-c658-43c3-9b4a-e3d4abf8534b/"
 )
 
 var (
 	// USERNAME username of slack
 	USERNAME = "GuardDutyAlert"
-
 	// SLACKURL webhookurl of slack
-	SLACKURL = os.Getenv("SLACKURL")
-
+	SLACKURL         = os.Getenv("SLACKURL")
 	notPostThreshold = os.Getenv("THRESHOLD")
-
-	// add excluded account name: []string{"dev"}
-	excludeAccountList = []string{"dev"}
-	config             = aws.Config{Region: aws.String(region)}
-	svcIAM             = iam.New(session.New(&config))
+	config           = aws.Config{Region: aws.String(region)}
+	svcIAM           = iam.New(session.New(&config))
 )
 
 // GuardDutyFindings set guardduty GuardDutyFindingsValue
@@ -72,7 +67,6 @@ func main() {
 // Handler get value from cloudwatch event
 func Handler(event events.CloudWatchEvent) (events.CloudWatchEvent, error) {
 	var resource string
-	postFlag := true
 	gd := &GuardDutyFindings{}
 
 	err := json.Unmarshal([]byte(event.Detail), gd)
@@ -88,13 +82,6 @@ func Handler(event events.CloudWatchEvent) (events.CloudWatchEvent, error) {
 	// get aws account name
 	accountAliasName := FetchAccountAlias()
 
-	// Check excluded List
-	for i := range excludeAccountList {
-		if strings.Contains(accountAliasName, excludeAccountList[i]) {
-			postFlag = false
-		}
-	}
-
 	// Set affected resource
 	if gd.Resource.InstanceDetails.InstanceID != "" {
 		resource = gd.Resource.InstanceDetails.InstanceID
@@ -105,9 +92,7 @@ func Handler(event events.CloudWatchEvent) (events.CloudWatchEvent, error) {
 	}
 
 	// Post slack
-	if postFlag == false && float64Severity < float64NotPostThreshold {
-		fmt.Println("Do not post slack")
-	} else {
+	if float64Severity > float64NotPostThreshold {
 		PostSlack(slackColor, gd.Title, accountAliasName, string(gd.Severity), resource, gd.Type, gd.Description)
 	}
 	return event, err
@@ -161,6 +146,7 @@ func PostSlack(slackColor string, title string, accountAliasName string, severit
 	attachment.Color = &color
 	payload := slack.Payload{
 		Username:    USERNAME,
+		IconUrl: iconURL,
 		Attachments: []slack.Attachment{attachment},
 	}
 	err := slack.Send(SLACKURL, "", payload)

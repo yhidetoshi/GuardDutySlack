@@ -9,7 +9,7 @@ https://yhidetoshi.hatenablog.com/entry/2019/08/31/145031
   - $ make build
 
 - ServerlessFrameworkでデプロイ
-  - $ sls deploy --aws-profile <PROFILE> --slackurl <SLACK_WEBHOOK_URL>
+  - $ sls deploy --aws-profile <PROFILE> --threshold <THRESHOLD> --slackurl <SLACK_WEBHOOK_URL>
 ```
 
 
