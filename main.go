@@ -70,7 +70,6 @@ func Handler(event events.CloudWatchEvent) (events.CloudWatchEvent, error) {
 	gd := &GuardDutyFindings{}
 
 	err := json.Unmarshal([]byte(event.Detail), gd)
-	fmt.Println(string([]byte(event.Detail)))
 	if err != nil {
 		fmt.Println(err)
 	}
