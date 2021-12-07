@@ -45,8 +45,8 @@ type GuardDutyFindings struct {
 type Resource struct {
 	ResourceType     string           `json:"resourceType,omitempty"`
 	UserName         string           `json:"userName,omitempty"`
-	InstanceDetails  InstanceDetails  `json:"instanceDetails,,omitempty"`
-	AccessKeyDetails AccessKeyDetails `json:"accessKeyDetails,,omitempty"`
+	InstanceDetails  InstanceDetails  `json:"instanceDetails,omitempty"`
+	AccessKeyDetails AccessKeyDetails `json:"accessKeyDetails,omitempty"`
 }
 
 // InstanceDetails set guardduty value
